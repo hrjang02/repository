@@ -6,13 +6,12 @@ import matplotlib.pyplot as plt
 import cartopy.crs as ccrs
 import matplotlib.ticker as mticker
 import cartopy.feature as cfeature
-
+#%%
 
 # Set Filepath
-#sat_path = 'C:/Users/USER/OneDrive - unist.ac.kr/AIR LAB/TROPOMI/'
 sat_path = '/data02/SATELLITE/TROPOMI/Products/OFFL/NO2/2019/01/'
-file_list = glob(sat_path+'*.nc') #S5P의 모든 파일의 list
-file_n = np.size(file_list)  #파일에 담긴 리스트의 크기 반환 = S5P 파일의 갯수
+file_list = glob(sat_path+'*.nc')
+file_n = np.size(file_list) 
 
 lon_min, lon_max, lat_min, lat_max = extent = [150,110, 20,50]
 
