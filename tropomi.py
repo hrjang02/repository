@@ -73,5 +73,5 @@ for i in range(10,13):
     
     smaplegend.set_label('NO2 TCD[molecules/cm$^2$]')
     plt.savefig('/home/hrjang/practice/result/%s NO2 %s %s %s:%s - %s %s:%s.png' %(sensor, product, day1, hour1, minute1, day2,hour2, minute2))
-    
+    plt.close()
     #%%
