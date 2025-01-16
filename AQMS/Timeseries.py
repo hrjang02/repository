@@ -37,7 +37,7 @@ fAQMS = fAQMS.assign(Year=fAQMS.index.year, Month=fAQMS.index.month, Day=fAQMS.i
 pollutants = ['SO2', 'CO', 'O3', 'NO2', 'PM10', 'PM25']
 fAQMS[['SO2', 'CO', 'O3', 'NO2']] *= 1000
 #%%
-def plot_station(start, end, frequency, output_dir = '/home/hrjang2/AQMS/figure/station', city = None):
+def plot_station(start, end, frequency, output_dir = '/home/hrjang2/AQMS/figure/station'):
     '''
     Parameters:
     - start: start time (YYYYMM, int)
@@ -49,8 +49,6 @@ def plot_station(start, end, frequency, output_dir = '/home/hrjang2/AQMS/figure/
     group_key = {'Yearly': 'Year', 'Monthly': 'Month'}.get(frequency)
     
     data = fAQMS[(fAQMS.index >= pd.to_datetime(start, format='%Y%m')) & (fAQMS.index <= pd.to_datetime(end, format='%Y%m'))]
-    if city is not None:
-        data = data[data['city'] == city]
     data = data.groupby(['측정소코드', group_key]).mean(numeric_only=True)
     stnIDs = data.index.get_level_values('측정소코드').unique()
 
@@ -66,8 +64,8 @@ def plot_station(start, end, frequency, output_dir = '/home/hrjang2/AQMS/figure/
             standard = POLLUTANT(pollutant).standard
             city_name = CITY(fAQMS.loc[fAQMS['측정소코드'] == stnID, 'city'].unique()[0]).city
 
-            if standard is not None and (y_values >= standard).any():
-                ax.axhline(y=standard, color='r', linestyle='--', label=f'Standard: {standard} {unit}')
+            if pollutant == 'PM25' and standard is not None and (y_values >= standard).any():
+                ax.axhline(y=standard, color='r', linestyle='--')
                 print(f'{city_name} {stnID} {pollutant} {y_values[y_values > standard]}')
 
             ax.plot(x_range, y_values, label=pollutant, marker='o', color = 'k')
@@ -117,8 +115,8 @@ def plot_city(start, end, frequency, output_dir = '/home/hrjang2/AQMS/figure/cit
             standard = POLLUTANT(pollutant).standard
             city_name = CITY(group).city
 
-            if standard is not None and (y_values >= standard).any():
-                ax.axhline(y=standard, color='r', linestyle='--', label=f'Standard: {standard} {unit}')
+            if pollutant == 'PM25' and standard is not None and (y_values >= standard).any():
+                ax.axhline(y=standard, color='r', linestyle='--')
                 print(f'{city_name} {pollutant} {y_values[y_values > standard]}')
 
             ax.plot(x_range, y_values, label=pollutant, marker='o', color = 'k')
@@ -167,8 +165,8 @@ def plot_city_yearmonth(start, end, frequency, output_dir = '/home/hrjang2/AQMS/
             standard = POLLUTANT(pollutant).standard
             city_name = CITY(group).city
 
-            if standard is not None and (y_values >= standard).any():
-                ax.axhline(y=standard, color='r', linestyle='--', label=f'Standard: {standard} {unit}')
+            if pollutant == 'PM25' and standard is not None and (y_values >= standard).any():
+                ax.axhline(y=standard, color='r', linestyle='--')
                 print(f'{city_name} {pollutant} {y_values[y_values > standard]}')
 
             ax.plot(range(len(y_values)), y_values, marker='o', color='k', label=pollutant)
@@ -208,8 +206,8 @@ def plot_dongnam(start, end, frequency, output_dir = '/home/hrjang2/AQMS/figure/
         name = POLLUTANT(pollutant).name
         standard = POLLUTANT(pollutant).standard
 
-        if standard is not None and (y_values > standard).any():
-            ax.axhline(y=standard, color='r', linestyle='--', label=f'Standard: {standard} {unit}')
+        if pollutant == 'PM25' and standard is not None and (y_values > standard).any():
+            ax.axhline(y=standard, color='r', linestyle='--')
             print(f'Dongnam {pollutant} {y_values[y_values > standard]}')
         
         x_range = data.index.get_level_values(group_key)
@@ -252,9 +250,10 @@ def plot_dongnam_yearmonth(start, end, frequency, output_dir = '/home/hrjang2/AQ
         name = POLLUTANT(pollutant).name
         standard = POLLUTANT(pollutant).standard
 
-        if standard is not None and (y_values > standard).any():
-            ax.axhline(y=standard, color='r', linestyle='--', label=f'Standard: {standard} {unit}')
+        if pollutant == 'PM25' and standard is not None and (y_values > standard).any():
+            ax.axhline(y=standard, color='r', linestyle='--')
             print(f'Dongnam {pollutant} {y_values[y_values > standard]}')
+
         ax.plot(range(len(y_values)), y_values, marker='o', color='k', label=pollutant)
         ax.set_xlabel('Year', fontsize=12)
         ax.set_ylabel(f'{name} [{unit}]', fontsize=12)
@@ -298,8 +297,8 @@ def plot_doy(year, output_dir = '/home/hrjang2/AQMS/figure/city', city = None):
             standard = POLLUTANT(pollutant).standard
             city_name = CITY(group).city
 
-            if pollutant == 'PM25' and standard is not None and (y_values > standard).any():
-                ax.axhline(y=standard, color='r', linestyle='--', label=f'Standard: {standard} {unit}')
+            if standard is not None and (y_values > standard).any():
+                ax.axhline(y=standard, color='r', linestyle='--')
                 print(f'{city_name} {pollutant} {y_values[y_values > standard]}')
 
             ax.plot(doys, y_values, color='k', label=pollutant)

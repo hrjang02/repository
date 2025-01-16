@@ -18,11 +18,11 @@ mcip_path = f'{model_path}/MCIP'
 cctm_flist = glob(f'{cctm_path}/*_{year}_*.nc')
 grdcro_fname = glob(f'{mcip_path}/GRIDCRO2D_{domain}_{year}.nc')[0]
 grddot_fname = f'{mcip_path}/GRIDDOT2D_D02_2022.nc'
-# %% Read CCTM file
+# %% 
 with Dataset(cctm_flist[0], 'r') as cctm:
     no2 = cctm.variables['NO2'][:,0,:,:]
     tflag = cctm.variables['TFLAG'][:,0,:]
-#%% Read MCIP file
+#%% 
 with Dataset(grdcro_fname, mode='r') as grdcro:
     lat = np.squeeze(grdcro.variables['LAT'][:])
     lon = np.squeeze(grdcro.variables['LON'][:])
