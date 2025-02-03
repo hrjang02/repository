@@ -1,5 +1,5 @@
+#%%
 import pandas as pd
-
 #%% 
 def convert_24_to_00(datetime):
     '''
@@ -25,7 +25,7 @@ class POLLUTANT:
         self.name = pollutant_info[pollutant]['name']
         self.standard = pollutant_info[pollutant].get('standard', None)
 #%%
-class CITY:
+class DONGNAM:
     def __init__(self, city):
         city_info = {
             '경산': {'city':'Gyeongsan', 'province':'Gyeongbuk'},
@@ -46,4 +46,4 @@ class CITY:
         }
         self.city = city_info[city]['city']
         self.province = city_info[city]['province']
-
+#%%
