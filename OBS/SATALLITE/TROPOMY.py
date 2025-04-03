@@ -13,7 +13,7 @@ sat_path = '/data02/SATELLITE/TROPOMI/Products/OFFL/NO2/2019/01/'
 file_list = glob(sat_path+'*.nc')
 file_n = np.size(file_list) 
 
-lon_min, lon_max, lat_min, lat_max = extent = [150,110, 20,50]
+lon_min, lon_max, lat_min, lat_max = extent = [150, 110, 20,50]
 
 
 #for i in range(0,file_n):
