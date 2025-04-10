@@ -2,7 +2,7 @@
 import pandas as pd
 import numpy as np
 from multiprocessing import Pool
-from AQMS_TOOL import convert_24_to_00, POLLUTANT, DONGNAM
+from AQMS_TOOL import convert_24_to_00, POLLUTANT, DONGNAM, PROVINCE
 import matplotlib.pyplot as plt
 #%%
 # 변환 함수 정의 
@@ -33,7 +33,7 @@ def load_and_preprocess(year, path='/data02/dongnam/data'):
     return df
 #%%
 # yearly trend
-def plot_yearly_trend(_df, _city, _pollutant, _include_type='all', _save_path='/data02/dongnam/output_fig/Yearly'):
+def plot_annual_trend(_df, _city, _pollutant, _include_type='all', _save_path='/data02/dongnam/output_fig/Yearly'):
     """ 
     특정 연도의 AQMS 데이터를 로드하고 전처리 
 
@@ -42,7 +42,7 @@ def plot_yearly_trend(_df, _city, _pollutant, _include_type='all', _save_path='/
         _city (str): 도시 이름 e.g. '부산'
         _pollutant (str): 오염물질 e.g. 'SO2'
         _include_type (str) : 'all' or '도시대기' (default: 'all')
-        _path (str): 데이터 경로 (default: '/data02/dongnam/output_fig/Yearly')
+        _path (str): 데이터 경로 
     """
 
     _df = _df[_df['city'] == _city] 
@@ -64,12 +64,12 @@ def plot_yearly_trend(_df, _city, _pollutant, _include_type='all', _save_path='/
 
     fig, ax = plt.subplots(figsize=(6, 3))
     yearly_avg.plot(ax=ax, marker = 'o', color='k')
-    ax.set_title(f'{_city_name} {str(_pollutant_name)} Yearly Trend', fontsize=12)
+    ax.set_title(f'{_city_name} {str(_pollutant_name)} Annual Trend', fontsize=12)
     ax.set_xlabel('Year', fontsize=10)
     ax.set_ylabel(f'{_pollutant_name} [{_pollutant_unit}]', fontsize=10)
     ax.grid(axis='y', linestyle='--', alpha=0.7)
     plt.tight_layout()
-    plt.savefig(f'{_save_path}/{_city_name}_{_pollutant}_yearly_trend.png')
+    plt.savefig(f'{_save_path}/{_city_name}_{_pollutant}_annual_trend.png')
     plt.show()
 #%%
 # 8-Hour Max Trend
