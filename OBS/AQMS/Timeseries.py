@@ -76,12 +76,7 @@ def plot_station(start, end, frequency, output_dir = '/data02/dongnam/data/outpu
             y_values = stn_data[pollutant]
             unit = POLLUTANT(pollutant).unit
             name = POLLUTANT(pollutant).name
-            standard = POLLUTANT(pollutant).standard
             city_name = DONGNAM(fAQMS.loc[fAQMS['측정소코드'] == stnID, 'city'].unique()[0]).city
-
-            if pollutant == 'PM25' and standard is not None and (y_values >= standard).any():
-                ax.axhline(y=standard, color='r', linestyle='--')
-                print(f'{city_name} {stnID} {pollutant} {y_values[y_values > standard]}')
 
             ax.plot(x_range, y_values, label=pollutant, marker='o', color = 'k')
             ax.set_xlabel(f'{group_key}', fontsize=12)
@@ -100,7 +95,7 @@ def plot_station(start, end, frequency, output_dir = '/data02/dongnam/data/outpu
             plt.savefig(f'{save_path}/{city_name}_{stnID}_{pollutant}_{frequency}.png')
             plt.close(fig)
 #%%
-def plot_annual_trend(data, area_name=None, area_type='Dongnam', save_path='/data02/dongnam/data/output_fig/hrjang_fig/yearly'):
+def plot_annual_trend(data, area_name=None, area_type='Dongnam', save_path='/home/hrjang2/0_code/yearly'):
     '''
     Parameters:
     - data: DataFrame (columns: ['Year', 'city', 'province', pollutant...])
@@ -145,10 +140,6 @@ def plot_annual_trend(data, area_name=None, area_type='Dongnam', save_path='/dat
 
             unit = POLLUTANT(pollutant).unit
             name = POLLUTANT(pollutant).name
-            standard = POLLUTANT(pollutant).standard
-
-            if standard is not None and (y_values > standard).any():
-                ax.axhline(y=standard, color='r', linestyle='--')
 
             ax.plot(x_range, y_values, marker='o', color='k', label=pollutant)
             ax.set_xlabel('Year', fontsize=12)
@@ -160,11 +151,9 @@ def plot_annual_trend(data, area_name=None, area_type='Dongnam', save_path='/dat
             fig.suptitle(f'{title_prefix} {name} Annual Trend', fontsize=15)
             fig.tight_layout()
 
-            plt.show()
             plt.savefig(f'{save_path}/{filename_prefix}_{pollutant}_Yearly.png')
             plt.close(fig)
 #%%
-############################################################
 ############################################################
 # 도시별
 citys = fAQMS['city'].unique()
@@ -178,8 +167,10 @@ plot_annual_trend(fAQMS, 'Dongnam')
 provinces = fAQMS['province'].unique()
 for province in provinces:
     plot_annual_trend(fAQMS, province, 'province')
+
+############################################################
 # %%
-def plot_yearmonth_trend(data, frequency, save_path='/data02/dongnam/data/output_fig/hrjang_fig/yearmonth', groupby_key=None):
+def plot_yearmonth_trend(data, frequency, save_path='/home/hrjang2/0_code/yearmonth', groupby_key=None):
     '''
     Parameters:
     - data: DataFrame with pollution data
@@ -204,12 +195,11 @@ def plot_yearmonth_trend(data, frequency, save_path='/data02/dongnam/data/output
         years = stn_data.index.get_level_values('Year').unique()
 
         for pollutant in pollutants:
-            fig, ax = plt.subplots(figsize=(6, 3))
+            fig, ax = plt.subplots(figsize=(8, 3))
             y_values = stn_data[pollutant]
 
             unit = POLLUTANT(pollutant).unit
             pol_name = POLLUTANT(pollutant).name
-            standard = POLLUTANT(pollutant).standard
 
             if groupby_key == 'city':
                 title_name = DONGNAM(group).city
@@ -218,11 +208,7 @@ def plot_yearmonth_trend(data, frequency, save_path='/data02/dongnam/data/output
             else:
                 title_name = 'Dongnam'
 
-            if (y_values >= standard).any():
-                ax.axhline(y=standard, color='r', linestyle='--')
-                print(f'{title_name} {pollutant} {y_values[y_values > standard]}')
-
-            ax.plot(range(len(y_values)), y_values, marker='o', color='k', label=pollutant)
+            ax.plot(range(len(y_values)), y_values, marker = 'o', color='k', label=pollutant)
             ax.set_xlabel('Year', fontsize=12)
             ax.set_ylabel(f'{pol_name} [{unit}]', fontsize=12)
             ax.grid()
@@ -235,17 +221,17 @@ def plot_yearmonth_trend(data, frequency, save_path='/data02/dongnam/data/output
 
             os.makedirs(save_path, exist_ok=True)
             plt.savefig(f'{save_path}/{title_name}_{pollutant}_Year{frequency}.png')
-            plt.show()
             plt.close(fig)
 #%%
-############################################################
 ############################################################
 # 도시별
 plot_yearmonth_trend(fAQMS, 'Monthly', groupby_key='city')
 
-# 도 전체 평균
+# 전체 평균
 plot_yearmonth_trend(fAQMS, 'Monthly', groupby_key=None)
 
 # 시도별
 plot_yearmonth_trend(fAQMS, 'Monthly', groupby_key='province')
 
+############################################################
+# %%

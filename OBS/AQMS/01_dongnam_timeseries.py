@@ -2,7 +2,7 @@
 import pandas as pd
 import numpy as np
 from multiprocessing import Pool
-from AQMS_TOOL import convert_24_to_00, POLLUTANT, DONGNAM, PROVINCE
+from AQMS_TOOL import convert_24_to_00, POLLUTANT, DONGNAM
 import matplotlib.pyplot as plt
 #%%
 # 변환 함수 정의 
@@ -32,8 +32,14 @@ def load_and_preprocess(year, path='/data02/dongnam/data'):
 
     return df
 #%%
+_dict = {
+
+
+
+
+#%%
 # yearly trend
-def plot_annual_trend(_df, _city, _pollutant, _include_type='all', _save_path='/data02/dongnam/output_fig/Yearly'):
+def plot_annual_trend(_df, _city, _pollutant, _include_type='all', _save_path='/home/hrjang2/0_code/pollutant/Yearly'):
     """ 
     특정 연도의 AQMS 데이터를 로드하고 전처리 
 
@@ -57,10 +63,7 @@ def plot_annual_trend(_df, _city, _pollutant, _include_type='all', _save_path='/
     _city_name = DONGNAM(_city).city
     _pollutant_name = POLLUTANT(_pollutant).name
     _pollutant_unit = POLLUTANT(_pollutant).unit
-    _pollutant_std = POLLUTANT(_pollutant).standard 
 
-    if (yearly_avg >= _pollutant_std).any():
-        ax.axhline(y=_pollutant_std, color='r', linestyle='--')
 
     fig, ax = plt.subplots(figsize=(6, 3))
     yearly_avg.plot(ax=ax, marker = 'o', color='k')
@@ -69,12 +72,12 @@ def plot_annual_trend(_df, _city, _pollutant, _include_type='all', _save_path='/
     ax.set_ylabel(f'{_pollutant_name} [{_pollutant_unit}]', fontsize=10)
     ax.grid(axis='y', linestyle='--', alpha=0.7)
     plt.tight_layout()
-    plt.savefig(f'{_save_path}/{_city_name}_{_pollutant}_annual_trend.png')
+    plt.savefig(f'{_save_path}/{_city}_{_pollutant}_Yearly_trend.png')
     plt.show()
 #%%
 # 8-Hour Max Trend
 # 'O3', 'CO'에 대해서만 적용
-def plot_8hr_max_trend(_df, _city, _pollutant, _include_type='all', _save_path='/data02/dongnam/output_fig/Yearly'):
+def plot_8hr_max_trend(_df, _city, _pollutant, _include_type='all', _save_path='/data02/dongnam/output_fig/pollutant/Yearly'):
     """
     특정 오염물질의 연도별 '일 최고 8시간 평균'의 연평균 추세
     
@@ -110,7 +113,7 @@ def plot_8hr_max_trend(_df, _city, _pollutant, _include_type='all', _save_path='
 
     fig, ax = plt.subplots(figsize=(6, 3))
     yearly_avg.plot(ax=ax, marker='o', color='k')
-    ax.set_title(f'{_city_name} {_pollutant_name} 8-Hour Max Yearly Trend')
+    ax.set_title(f'{_city_name} {_pollutant_name} 8-Hour Max Trend')
     ax.set_xlabel('Year', fontsize=10)
     ax.set_ylabel(f'{_pollutant_name} [{_pollutant_unit}]', fontsize=10)
     ax.grid(axis='y', linestyle='--', alpha=0.7)
@@ -120,7 +123,7 @@ def plot_8hr_max_trend(_df, _city, _pollutant, _include_type='all', _save_path='
 
 #%%
 # Monthly Trend Plot
-def plot_monthly_trend(_year, _df, _city, _pollutant, _include_type='all', _save_path='/data02/dongnam/output_fig/Monthly'):
+def plot_monthly_trend(_year, _df, _city, _pollutant, _include_type='all', _save_path='/data02/dongnam/output_fig/pollutant/Monthly'):
     """
     특정 오염물질의 월별 평균 추세
 
@@ -161,13 +164,13 @@ def plot_monthly_trend(_year, _df, _city, _pollutant, _include_type='all', _save
     for station in monthly_avg.index:
         if station not in roadside_stations:
             color_idx = general_idx % len(colors) 
-            ax.plot(monthly_avg.columns, monthly_avg.loc[station], label=station, color=colors[color_idx])
+            ax.plot(monthly_avg.columns, monthly_avg.loc[station], label=station, color=colors[color_idx], linewidth=1.5, alpha=1.0)
             general_idx += 1
 
     for station in monthly_avg.index:
         if station in roadside_stations:
             linestyle = linestyles[roadside_idx % len(linestyles)]
-            ax.plot(monthly_avg.columns, monthly_avg.loc[station], label=station, linestyle=linestyle, color='black', linewidth=1.5)
+            ax.plot(monthly_avg.columns, monthly_avg.loc[station], label=station, linestyle=linestyle, color='black', linewidth=1.5, alpha=0.7)
             roadside_idx += 1
 
     avg_line = ax.plot(monthly_avg.columns, monthly_avg.mean(axis=0), color='red', linestyle='-', marker='o', linewidth=2, label='평균')
@@ -187,9 +190,51 @@ def plot_monthly_trend(_year, _df, _city, _pollutant, _include_type='all', _save
     ax.legend(fontsize=8, loc='lower center', bbox_to_anchor=(0.5, bbox_y), ncol=legend_cols, frameon=False)
 
     plt.tight_layout()
-    plt.savefig(f'{_save_path}/{_city_name}_{_pollutant}_monthly_trend.png', bbox_inches='tight', dpi=300)
+    #plt.savefig(f'{_save_path}/{_city_name}_{_pollutant}_monthly_trend.png', bbox_inches='tight', dpi=300)
     plt.show()
+#%%
+def plot_monthly_variation(_year, _df, _city, _pollutant, _save_path='/data02/dongnam/output_fig/pollutant/Monthly'):
+    '''
+    특정 오염물질의 월별 평균 추세
+    Args:
+        _year (str): 기준연도
+        _df (pd.DataFrame): AQMS 데이터
+        _city (str): 도시 이름 e.g. '부산'
+        _pollutant (str): 오염물질 e.g. 'SO2'
+        _save_path (str): 저장 경로 (default: '/data02/dongnam/output_fig/Monthly')
+    '''
 
+    plt.rc('font', family='NanumGothic')
+    plt.rcParams['axes.unicode_minus'] = False
+
+    _df = _df[(_df['Year'] == str(_year)) & (_df['city'] == _city)]
+    _df = _df[_df['망'].str.contains('도시대기')]
+    
+
+    _df['Month'] = _df['Month'].astype(int)
+    monthly_avg = _df.groupby('Month').mean(numeric_only=True)[_pollutant]
+    monthly_avg = monthly_avg.sort_index()
+
+
+    _city_name = DONGNAM(_city).city
+    _pollutant_name = POLLUTANT(_pollutant).name
+    _pollutant_unit = POLLUTANT(_pollutant).unit
+
+
+
+    fig, ax = plt.subplots(figsize=(6, 3))
+    monthly_avg.plot(ax=ax, marker = 'o', color='k')
+    ax.set_title(f'{_city_name} {_pollutant_name} Monthly Trend', fontsize=12)
+    ax.set_ylabel(f'{_pollutant_name} [{_pollutant_unit}]', fontsize=10)
+    ax.set_xlabel('Month', fontsize=10)
+    ax.set_xticks(monthly_avg.index)
+    ax.set_xticklabels([f'{m}월' for m in monthly_avg.index])
+
+    ax.grid(axis='y', linestyle='--', alpha=0.7)
+
+    plt.tight_layout()
+    plt.savefig(f'{_save_path}/{_city_name}_{_pollutant}_Monthly_variation.png', dpi=300)
+    plt.show()
 
 #%%##################################################
 # 2019~2023년 DataFrame을 병렬로 처리
@@ -207,14 +252,14 @@ if __name__ == "__main__":
 
 
 #%%##################################################
-# Yearly Trend Plot -> '도시대기'
+# Annual Trend Plot -> '도시대기'
 pollutants = ['SO2', 'NO2', 'PM10', 'PM25', 'O3', 'CO']
 dongnam_city = ['부산', '울산', '대구', '하동', '진주', '고성', '창원', '김해', '양산', '구미', '칠곡', '경산', '영천', '포항', '경주']
 
 for city in dongnam_city:
     for pollutant in pollutants:
         print(f'{city} {pollutant} 연도별 평균')
-        plot_yearly_trend(AQMS, city, pollutant, _include_type='도시대기')
+        plot_annual_trend(AQMS, city, pollutant, _include_type='도시대기')
 
 
 # %%##################################################
@@ -231,11 +276,23 @@ for city in dongnam_city:
 # %%##################################################
 # Monthly Trend Plot -> '도시대기','도로변대기'
 pollutants = ['SO2', 'NO2', 'PM10', 'PM25', 'O3', 'CO']
-dongnam_city = ['부산', '울산']
+dongnam_city = ['부산', '울산', '대구', '하동', '진주', '고성', '창원', '김해', '양산', '구미', '칠곡', '경산', '영천', '포항', '경주']
 year = 2023
 
 for city in dongnam_city:
     for pollutant in pollutants:
-        print(f'{city} {pollutant} 월별 평균')
+        print(f'{city} {pollutant} 월간 변화')
         plot_monthly_trend(year, AQMS, city, pollutant)
+
+#%%
+# %%##################################################
+# Monthly Variation Plot -> '도시대기' // 'PM10', 'PM25'만 적용
+pollutants = ['PM10', 'PM25']
+dongnam_city = ['부산', '울산', '대구', '하동', '진주', '고성', '창원', '김해', '양산', '구미', '칠곡', '경산', '영천', '포항', '경주']
+
+for city in dongnam_city:
+    for pollutant in pollutants:
+        print(f'{city} {pollutant} 월변화')
+        plot_monthly_variation(year, AQMS, city, pollutant)
+
 # %%
