@@ -153,6 +153,41 @@ print(f'하동 daily O3 Q3: {int(Q3_o3_daily):02d}, upper_bound: {int(upper_boun
 print(f'하동 NO2 Q3: {Q3_no2}, upper_bound: {upper_bound_no2}')
 print(f'하동 daily NO2 Q3: {int(Q3_no2_daily):02d}, upper_bound: {int(upper_bound_no2_daily):02d}')
 print(f'동남권 O3 Q3: {int(dongnam_o3_Q3):02d}, 동남권 NO2 Q3: {int(dongnam_no2_Q3):02d}')
+#%% 1-0. O3, NO2 통계 요약
+def print_pollutant_summary(pol, outlier,df_in, df_no,region_name='하동'):
+    if pol == 'O3':
+        outlier = outliers_o3_daily.copy()
+        df_in = df_o3_daily.copy()
+        df_no = df_o3_no_daily.copy()
+    elif pol == 'NO2':
+        outlier = outliers_no2_daily.copy()
+        df_in = df_no2_daily.copy()
+        df_no = df_no2_no_daily.copy()
+    else:
+        raise ValueError("'O3' 또는 'NO2'만 가능함요")
+
+    h_mean_out = outlier[pol].mean()
+    h_mean_in  = df_in[pol].mean()
+    h_mean_no  = df_no[pol].mean()
+    h_med_out = outlier[pol].median()
+    h_med_in   = df_in[pol].median()
+    h_med_no   = df_no[pol].median()
+
+    pol_names = {'O3': '오존', 'NO2': '이산화질소'}
+    pol_name = pol_names.get(pol, pol)
+
+    print(f"\n📊 {region_name} {pol_name} 통계 요약 (단위:ppb)")
+    print("-" * 43)
+    print(f"{'구분':<10}{'Mean':>12}{'Median':>14}")
+    print("-" * 43)
+    print(f"{'고농도 only    ':<10}{h_mean_out:>12.3f}{h_med_out:>14.3f}")
+    print(f"{'고농도 포함':<10}{h_mean_in:>12.3f}{h_med_in:>14.3f}")
+    print(f"{'고농도 제외':<10}{h_mean_no:>12.3f}{h_med_no:>14.3f}")
+    print("-" * 43)
+
+print(f'동남권 O3 Q3: {int(dongnam_o3_Q3):02d}, 동남권 NO2 Q3: {int(dongnam_no2_Q3):02d}')
+print_pollutant_summary('O3', outliers_o3_daily, df_o3_daily, df_o3_no_daily)
+print_pollutant_summary('NO2', outliers_no2_daily, df_no2_daily, df_no2_no_daily)
 #%% 1-1. 하동 O3, NO2 Boxplot
 def plot_boxplot_with_stats(df, pol, Q1, Q2, Q3, lower_bound, upper_bound, region_name='지역명', save_path='/data02/dongnam/output_fig/hadong0/'):
 
@@ -187,6 +222,33 @@ def plot_boxplot_with_stats(df, pol, Q1, Q2, Q3, lower_bound, upper_bound, regio
 plot_boxplot_with_stats(df_o3_daily, 'O3', Q1_o3_daily, Q2_o3_daily, Q3_o3_daily, lower_bound_o3_daily, upper_bound_o3_daily, region_name='하동',save_path='/data02/dongnam/output_fig/hadong0/')
 plot_boxplot_with_stats(df_no2_daily, 'NO2', Q1_no2_daily, Q2_no2_daily, Q3_no2_daily, lower_bound_no2_daily, upper_bound_no2_daily, region_name='하동',save_path='/data02/dongnam/output_fig/hadong0/')
 
+#%% 1-5. O3, NO2 증가율. 차이?
+def plot_yearly_trend(df_in, df_no, pol, save_path=None):
+    mean_in = df_in.groupby('Year')[pol].mean()
+    mean_no = df_no.groupby('Year')[pol].mean()
+
+    diff_pct = ((mean_in - mean_no) / mean_in * 100).round(2)
+    diff_pct.index = diff_pct.index.astype(int)
+    pol_name = POLLUTANT(pol).name
+
+    # 증가율 plot
+    ax = diff_pct.plot(kind='bar', color='skyblue', figsize=(5, 3))
+    plt.title(f'{pol_name} 농도 증가율 (%)', fontsize=12)
+    plt.ylabel('Difference (%)')
+    plt.xticks(rotation=0)
+    plt.grid(True, linestyle='--', alpha=0.5, axis='y')
+
+    for i, v in enumerate(diff_pct.values):
+        ax.text(i, v / 2 if v != 0 else 0, f'{v:.1f}%', ha='center', va='center', color='black', fontsize=10)
+
+    plt.tight_layout()
+    plt.savefig(f'{save_path}{pol}_growthrate.png', dpi=300)
+    plt.show()
+
+
+# 함수 호출
+plot_yearly_trend(df_o3_daily, df_o3_no_daily, 'O3', save_path='/data02/dongnam/output_fig/hadong0/')
+plot_yearly_trend(df_no2_daily, df_no2_no_daily, 'NO2', save_path='/data02/dongnam/output_fig/hadong0/')
 # %% 2-1. 바람장미 -> 음...........
 ## 오존 outlier 80.75 / daily outlier 65 // 이산화질소 outlier  21.25 / daily outlier 18
 custom_bins = {
