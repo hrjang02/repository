@@ -99,16 +99,14 @@ df_no2_daily = df_no2_daily.dropna()
 
 #동남권
 df_dongnam_o3 = dongnam_aqms_o3.copy()    
-df_dongnam_o3['Year'] = df_dongnam_o3['KST'].dt.year
-df_dongnam_o3['Month'] = df_dongnam_o3['KST'].dt.month
-df_dongnam_o3['Hour'] = df_dongnam_o3['KST'].dt.hour
+df_dongnam_o3['KST'] = pd.to_datetime(df_dongnam_o3['KST'])
+df_dongnam_o3 = df_dongnam_o3.resample('D', on='KST').mean().reset_index()
 df_dongnam_o3 = df_dongnam_o3.dropna()
 dongnam_o3_Q3 = df_dongnam_o3['O3'].quantile(0.75)
 
 df_dongnam_no2 = dongnam_aqms_no2.copy()    
-df_dongnam_no2['Year'] = df_dongnam_no2['KST'].dt.year
-df_dongnam_no2['Month'] = df_dongnam_no2['KST'].dt.month
-df_dongnam_no2['Hour'] = df_dongnam_no2['KST'].dt.hour
+df_dongnam_no2['KST'] = pd.to_datetime(df_dongnam_no2['KST'])
+df_dongnam_no2 = df_dongnam_no2.resample('D', on='KST').mean().reset_index()
 df_dongnam_no2 = df_dongnam_no2.dropna()
 dongnam_no2_Q3 = df_dongnam_no2['NO2'].quantile(0.75)
 #%% 0-4. 하동 풍향 카테고리 나누기 
@@ -221,7 +219,104 @@ def plot_boxplot_with_stats(df, pol, Q1, Q2, Q3, lower_bound, upper_bound, regio
 
 plot_boxplot_with_stats(df_o3_daily, 'O3', Q1_o3_daily, Q2_o3_daily, Q3_o3_daily, lower_bound_o3_daily, upper_bound_o3_daily, region_name='하동',save_path='/data02/dongnam/output_fig/hadong0/')
 plot_boxplot_with_stats(df_no2_daily, 'NO2', Q1_no2_daily, Q2_no2_daily, Q3_no2_daily, lower_bound_no2_daily, upper_bound_no2_daily, region_name='하동',save_path='/data02/dongnam/output_fig/hadong0/')
+#%% 1-2. O3, NO2 연도별 평균 농도
+def plot_yearly_mean(df, outlier, no_outlier, pol, region_name='지역명',save_path=None):
+    h_mean = df.groupby('Year')[pol].mean().drop(2024, errors='ignore')
+    h_out_mean = outlier.groupby('Year')[pol].mean().drop(2024, errors='ignore')
+    h_no_out_mean = no_outlier.groupby('Year')[pol].mean().drop(2024, errors='ignore')
 
+    plt.figure(figsize=(4, 3))
+    plt.plot(h_mean.index, h_mean.values, marker='o', label='전체 데이터', color='black')
+    plt.plot(h_out_mean.index, h_out_mean.values, marker='o', label='고농도 only', color='red')
+    plt.plot(h_no_out_mean.index, h_no_out_mean.values, marker='o', label='고농도 제외', color='blue')
+
+    pol_name = POLLUTANT(pol).name
+    plt.title(f'연도별 {pol_name} 평균 농도', fontsize=14)
+    plt.xlabel('연도', fontsize=12)
+    plt.ylabel(f'{pol_name} 평균 농도 (ppb)', fontsize=12)
+    plt.xticks(h_mean.index)
+    plt.grid(True, linestyle='--', alpha=0.7)
+    plt.legend()
+    plt.tight_layout()
+
+    if save_path:
+        plt.savefig(save_path+f'{pol}_{region_name}_yearly.png', dpi=300)
+        plt.close()
+    else:
+        plt.show()
+
+plot_yearly_mean(df_o3_daily, outliers_o3_daily, df_o3_no_daily, 'O3', region_name='하동')
+plot_yearly_mean(df_no2_daily, outliers_no2_daily, df_no2_no_daily, 'NO2', region_name='하동')
+#%% 1-3. O3, NO2 월별 평균 농도
+def plot_yearmonthly(df, outlier, no_outlier, pol, region_name='지역명', save_path=None):
+    # 연-월별 평균
+    h_mean = df.groupby(['Year', 'Month'])[pol].mean().reset_index()
+    h_out_mean = outlier.groupby(['Year', 'Month'])[pol].mean().reset_index()
+    h_no_out_mean = no_outlier.groupby(['Year', 'Month'])[pol].mean().reset_index()
+
+
+    # 연-월 datetime index 생성
+    for df in [h_mean, h_out_mean, h_no_out_mean]:
+        df['YearMonth'] = pd.to_datetime(df['Year'].astype(int).astype(str) + '-' + df['Month'].astype(int).astype(str).str.zfill(2))
+        df.set_index('YearMonth', inplace=True)
+
+    plt.figure(figsize=(8, 3))
+
+    plt.plot(h_out_mean.index, h_out_mean[pol], marker='o', label='고농도 only', color='red')
+    plt.plot(h_mean.index, h_mean[pol], marker='o', label='전체 데이터', color='black')
+    plt.plot(h_no_out_mean.index, h_no_out_mean[pol], marker='o', label='고농도 제외', color='blue', alpha=0.7)
+    
+    pol_name = POLLUTANT(pol).name
+
+    plt.title(f'연-월별 {pol_name} 평균 농도', fontsize=14)
+    plt.ylabel(f'{pol_name} 농도 (ppb)', fontsize=12)
+    plt.xticks(h_mean.index[::max(len(h_mean)//15,1)],
+               h_mean.index[::max(len(h_mean)//15,1)].strftime('%Y%m'), rotation=90)
+    plt.grid(True, linestyle='--', alpha=0.7)
+    plt.legend(fontsize=8)
+    plt.tight_layout()
+
+    if save_path:
+        plt.savefig(save_path+f'{pol}_{region_name}_yearmonth.png', dpi=300)
+        plt.close()
+    else:
+        plt.show()
+
+
+plot_yearmonthly(df_o3_daily, outliers_o3_daily, df_o3_no_daily, 'O3', region_name='하동')
+plot_yearmonthly(df_no2_daily, outliers_no2_daily, df_no2_no_daily, 'NO2', region_name='하동')
+#%% 1-4. O3, NO2 히스토그램
+def plot_histogram(df_in, df_no, pol, region_name='하동', save_path=None):
+    plt.figure(figsize=(5, 3))
+    bins = np.histogram_bin_edges(pd.concat([df_in[pol], df_no[pol]]).dropna(), bins=30)
+
+    # 고농도 포함
+    sns.histplot(data=df_in, x=pol, bins=bins, element='step', stat='count',
+                 common_norm=False, color='gray', label='고농도 포함')
+
+    # 고농도 제외
+    sns.histplot(data=df_no, x=pol, bins=bins, element='step', stat='count',
+                 common_norm=False, color='skyblue', label='고농도 제외')
+
+    pol_names = {'SO2': 'SO$_2$', 'O3': 'O$_3$', 'NO2': 'NO$_2$'}
+    pol_label = pol_names.get(pol, pol)
+
+    plt.title(f'{region_name} {pol_label} 분포', fontsize=14)
+    plt.xlabel(f'{pol_label} 농도 (ppb)', fontsize=12)
+    plt.ylabel('frequency', fontsize=12)
+    #plt.yscale('log')
+    plt.grid(True, linestyle='--', alpha=0.7)
+    plt.legend(fontsize=8)
+    plt.tight_layout()
+
+    if save_path:
+        plt.savefig(save_path+f'{pol}_{region_name}_histogram_NOTlog.png', dpi=300)
+        plt.close()
+    else:
+        plt.show()
+
+plot_histogram(df_o3_daily, df_o3_no_daily, 'O3')
+plot_histogram(df_no2_daily, df_no2_no_daily, 'NO2')
 #%% 1-5. O3, NO2 증가율. 차이?
 def plot_yearly_trend(df_in, df_no, pol, save_path=None):
     mean_in = df_in.groupby('Year')[pol].mean()
@@ -242,25 +337,17 @@ def plot_yearly_trend(df_in, df_no, pol, save_path=None):
         ax.text(i, v / 2 if v != 0 else 0, f'{v:.1f}%', ha='center', va='center', color='black', fontsize=10)
 
     plt.tight_layout()
-    plt.savefig(f'{save_path}{pol}_growthrate.png', dpi=300)
-    plt.show()
+    if save_path:
+        plt.savefig(f'{save_path}{pol}_growthrate.png', dpi=300)
+        plt.close()
+    else:
+        plt.show()
 
-
-# 함수 호출
 plot_yearly_trend(df_o3_daily, df_o3_no_daily, 'O3', save_path='/data02/dongnam/output_fig/hadong0/')
 plot_yearly_trend(df_no2_daily, df_no2_no_daily, 'NO2', save_path='/data02/dongnam/output_fig/hadong0/')
 # %% 2-1. 바람장미 -> 음...........
-## 오존 outlier 80.75 / daily outlier 65 // 이산화질소 outlier  21.25 / daily outlier 18
-custom_bins = {
-    'SO2':  [0, 4.5, 10, 15, 20, 25],
-    'NO2':  [0, 5, 10, 15, 20],
-    'CO':   [0, 200, 400, 600, 800],
-    'O3':   [0, 20, 40, 60, 80],
-    'PM10': [0, 10, 20, 30, 40, 50],
-    'PM25': [0, 8, 16, 24, 32, 40],
-}
-
-def plot_windrose(df, pol, season, region_name='하동', save_dir='/data02/dongnam/output_fig/hadong0/'):
+## 오존 daily outlier 65.20549242424244 // 이산화질소 daily outlier 18.85606060606061
+def plot_windrose(df, pol, season, outlier = False, region_name='하동', save_path='/data02/dongnam/output_fig/hadong0/'):
     if season == '봄':
         df = df.loc[(df['Month'] >= 3) & (df['Month'] <= 5)]
     elif season == '여름':
@@ -272,23 +359,33 @@ def plot_windrose(df, pol, season, region_name='하동', save_dir='/data02/dongn
     elif season == '전체':
         df = df.copy()
 
-    bins = custom_bins.get(pol)  
 
     fig = plt.figure(figsize=(6, 5))
     ax = WindroseAxes.from_ax(fig=fig)
-    ax.bar(df['WD'], df[pol], normed=True, opening=0.8, bins=bins, alpha=0.8)
-
+    
     pol_name = POLLUTANT(pol).name
 
-    plt.title(f'{region_name} {season} 풍향별 {pol_name} 고농도 분포', fontsize=13)
-    plt.legend(loc='upper right', bbox_to_anchor=(1.2, 1.1), fontsize=7)
+    if outlier == True:
+        if pol == 'O3':
+            bins = [65, 70, 75, 80, 85]
+        elif pol == 'NO2':
+            bins = [18, 20, 22, 24, 26]
+        ax.bar(df['WD'], df[pol], normed=True, opening=0.8, bins=bins, alpha=0.8)
+        plt.title(f'{region_name} {season} 풍향별 {pol_name} 고농도 분포({len(df)})', fontsize=13)
+        ax.set_yticks([8,16,24,32,40])
+        ax.set_yticklabels(['8%','16%','24%','32%','40'], fontsize=12)
+        plt.legend(loc='upper right', bbox_to_anchor=(1.2, 1.1), fontsize=7)
+        plt.tight_layout()
+        plt.savefig(f'{save_path}{pol}_{season}_고농도_windrose.png', dpi=300)
+        plt.show()
+    else:
+        plt.title(f'{region_name} {season} 풍향별 {pol_name} 농도 분포{len(df)}', fontsize=13)
+        ax.set_yticks([5, 10, 15, 20, 25])
+        ax.set_yticklabels(['5%','10%','15%','20%','25%'], fontsize=12)
+        plt.legend(loc='upper right', bbox_to_anchor=(1.2, 1.1), fontsize=7)
+        plt.tight_layout()
+        plt.savefig(f'{save_path}{pol}_{season}_windrose.png', dpi=300)
+        plt.show()
 
-    ax.set_yticks([4, 8, 12, 16, 20])
-    ax.set_yticklabels(['4%', '8%', '12%', '16%', '20%'], fontsize=12)
-
-    plt.tight_layout()
-    plt.savefig(f'{save_dir}{pol}_{season}_고농도_windrose.png', dpi=300, bbox_inches='tight')
-    plt.show()
-
-plot_windrose(outliers_o3, 'O3', '전체')
-plot_windrose(outliers_no2, 'NO2', '전체')
+#plot_windrose(outliers_o3_daily, 'O3', '겨울', outlier=True)
+plot_windrose(outliers_no2_daily, 'NO2', '겨울', outlier=True)
