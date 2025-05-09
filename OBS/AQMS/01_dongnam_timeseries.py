@@ -32,12 +32,6 @@ def load_and_preprocess(year, path='/data02/dongnam/data'):
 
     return df
 #%%
-_dict = {
-
-
-
-
-#%%
 # yearly trend
 def plot_annual_trend(_df, _city, _pollutant, _include_type='all', _save_path='/home/hrjang2/0_code/pollutant/Yearly'):
     """ 

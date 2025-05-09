@@ -22,23 +22,49 @@ aqms_data = pd.concat([pd.read_csv(f) for f in aqms_files], ignore_index=True)
 
 # AWS 데이터 전처리
 '''하동읍(932) 금성면(933) AWS 데이터'''
+def weighted_wind_direction_mean(direction_deg, speed):
+    """
+    풍속을 가중치로 사용해 풍향(도 단위)의 가중 평균을 계산하는 함수.
 
-def wind_components(ws, wd):
-    wd_rad = np.deg2rad(wd)
-    u = -ws * np.sin(wd_rad)
-    v = -ws * np.cos(wd_rad)
-    return u, v
+    Parameters:
+    - direction_deg: 풍향 시리즈 또는 배열 (단위: 도, 0~360)
+    - speed: 풍속 시리즈 또는 배열 (가중치 역할)
 
-def uv_to_ws_wd(u, v):
-    ws = np.sqrt(u**2 + v**2)
-    wd = (np.rad2deg(np.arctan2(-u, -v)) + 360) % 360
-    return ws, wd
+    Returns:
+    - 평균 풍향 (0~360도 사이)
+    """
+    # NaN 제거
+    mask = ~np.isnan(direction_deg) & ~np.isnan(speed)
+    direction_deg = np.array(direction_deg)[mask]
+    speed = np.array(speed)[mask]
+
+    if len(direction_deg) == 0:
+        return np.nan  # 데이터가 없으면 NaN 반환
+
+    # 도를 라디안으로 변환
+    direction_rad = np.deg2rad(direction_deg)
+
+    # x, y 성분의 가중 평균 계산
+    x = np.sum(speed * np.cos(direction_rad)) / np.sum(speed)
+    y = np.sum(speed * np.sin(direction_rad)) / np.sum(speed)
+
+    # 평균 풍향 계산 (라디안 → 도)
+    mean_rad = np.arctan2(y, x)
+    mean_deg = np.rad2deg(mean_rad)
+
+    # 0~360도로 보정
+    if mean_deg < 0:
+        mean_deg += 360
+
+    return mean_deg
+def apply_weighted_mean(group):
+    wd_mean = weighted_wind_direction_mean(group['WD'], group['WS'])
+    ws_mean = group['WS'].mean()  # or sum(), 원하는 방식
+    return pd.Series({'WD': wd_mean, 'WS': ws_mean})
 
 aws = aws_data[aws_data['STN'].astype(str).str.contains('932|933')][['KST', 'STN', 'WD', 'WS']]
 aws['KST'] = pd.to_datetime(aws['KST'], format='%Y%m%d%H%M')
-aws[['U', 'V']] = aws.apply(lambda row: pd.Series(wind_components(row['WS'], row['WD'])), axis=1)
-aws_stn = aws.groupby(['KST']).agg({'U': 'mean', 'V': 'mean'}).reset_index()
-aws_stn[['WS', 'WD']] = aws_stn.apply(lambda row: pd.Series(uv_to_ws_wd(row['U'], row['V'])), axis=1)
+aws_stn = aws.groupby('KST').apply(apply_weighted_mean).reset_index()
 aws_stn = aws_stn.drop(aws_stn.index[0])
 aws_stn['KST'] = aws_stn['KST'].astype(str).apply(convert_24_to_00)
 aws_result = aws_stn[['KST', 'WD', 'WS']]
@@ -97,6 +123,12 @@ df_no2['KST'] = pd.to_datetime(df_no2['KST'])
 df_no2_daily = df_no2.resample('D', on='KST').mean().reset_index()
 df_no2_daily = df_no2_daily.dropna()
 
+# MDA8
+df_o3 = df_o3.set_index('KST')
+df_o3['8hr_max'] = df_o3['O3'].rolling('8H', min_periods=8).mean()  # 8시간 평균 계산
+daily_max_8hr = df_o3.resample('D')['8hr_max'].max()  # 일별 최고 8시간 평균
+over_8hr = daily_max_8hr[daily_max_8hr > 60]  # MDA8 기준 60ppb
+over_8hr = over_8hr.to_dataframe()
 #동남권
 df_dongnam_o3 = dongnam_aqms_o3.copy()    
 df_dongnam_o3['KST'] = pd.to_datetime(df_dongnam_o3['KST'])
@@ -145,6 +177,7 @@ df_o3_no, outliers_o3, Q1_o3, Q2_o3, Q3_o3, lower_bound_o3, upper_bound_o3 = rem
 df_no2_no, outliers_no2, Q1_no2, Q2_no2, Q3_no2, lower_bound_no2, upper_bound_no2 = remove_outliers(df_no2, 'NO2')
 df_o3_no_daily, outliers_o3_daily, Q1_o3_daily, Q2_o3_daily, Q3_o3_daily, lower_bound_o3_daily, upper_bound_o3_daily= remove_outliers(df_o3_daily, 'O3')
 df_no2_no_daily, outliers_no2_daily, Q1_no2_daily, Q2_no2_daily, Q3_no2_daily, lower_bound_no2_daily, upper_bound_no2_daily= remove_outliers(df_no2_daily, 'NO2')
+df_o3_no_mda8, outliers_o3_mda8, Q1_o3_mda8, Q2_o3_mda8, Q3_o3_mda8, lower_bound_o3_mda8, upper_bound_o3_mda8 = remove_outliers(over_8hr, '8hr_max')
 
 print(f'하동 Q3: {Q3_o3}, upper_bound: {upper_bound_o3}')
 print(f'하동 daily O3 Q3: {int(Q3_o3_daily):02d}, upper_bound: {int(upper_bound_o3_daily):02d}')
@@ -187,7 +220,7 @@ print(f'동남권 O3 Q3: {int(dongnam_o3_Q3):02d}, 동남권 NO2 Q3: {int(dongna
 print_pollutant_summary('O3', outliers_o3_daily, df_o3_daily, df_o3_no_daily)
 print_pollutant_summary('NO2', outliers_no2_daily, df_no2_daily, df_no2_no_daily)
 #%% 1-1. 하동 O3, NO2 Boxplot
-def plot_boxplot_with_stats(df, pol, Q1, Q2, Q3, lower_bound, upper_bound, region_name='지역명', save_path='/data02/dongnam/output_fig/hadong0/'):
+def plot_boxplot_with_stats(df, pol, Q1, Q2, Q3, lower_bound, upper_bound, save_path='/data02/dongnam/output_fig/hadong0/'):
 
     fig, ax = plt.subplots(figsize=(4.5, 5))
     
@@ -205,20 +238,20 @@ def plot_boxplot_with_stats(df, pol, Q1, Q2, Q3, lower_bound, upper_bound, regio
 #        if yval > 0:  # log scale 범위 안에서만 선 긋기
 #            ax.axhline(y=yval, color='gray', linestyle='--', linewidth=0.5)
     pol_name = POLLUTANT(pol).name
-    ax.set_title(f'{region_name} {pol_name} Boxplot', fontsize=14)
+    ax.set_title(f'하동 {pol_name} Boxplot', fontsize=14)
     ax.set_ylabel(f'{pol_name} (ppb)')
     ax.set_xticklabels([f'전체 데이터({len(df)})'])
     
     plt.grid(True, linestyle='--', alpha=0.7)
     plt.tight_layout()
     if save_path:
-        plt.savefig(save_path+f'{pol}_{region_name}_boxplot.png', dpi=300)
+        plt.savefig(save_path+f'{pol}_하동_boxplot.png', dpi=300)
         plt.close()
     else:
         plt.show()
 
-plot_boxplot_with_stats(df_o3_daily, 'O3', Q1_o3_daily, Q2_o3_daily, Q3_o3_daily, lower_bound_o3_daily, upper_bound_o3_daily, region_name='하동',save_path='/data02/dongnam/output_fig/hadong0/')
-plot_boxplot_with_stats(df_no2_daily, 'NO2', Q1_no2_daily, Q2_no2_daily, Q3_no2_daily, lower_bound_no2_daily, upper_bound_no2_daily, region_name='하동',save_path='/data02/dongnam/output_fig/hadong0/')
+plot_boxplot_with_stats(df_o3_daily, 'O3', Q1_o3_daily, Q2_o3_daily, Q3_o3_daily, lower_bound_o3_daily, upper_bound_o3_daily,save_path='/data02/dongnam/output_fig/hadong0/')
+plot_boxplot_with_stats(df_no2_daily, 'NO2', Q1_no2_daily, Q2_no2_daily, Q3_no2_daily, lower_bound_no2_daily, upper_bound_no2_daily,save_path='/data02/dongnam/output_fig/hadong0/')
 #%% 1-2. O3, NO2 연도별 평균 농도
 def plot_yearly_mean(df, outlier, no_outlier, pol, region_name='지역명',save_path=None):
     h_mean = df.groupby('Year')[pol].mean().drop(2024, errors='ignore')
@@ -367,7 +400,7 @@ def plot_windrose(df, pol, season, outlier = False, region_name='하동', save_p
 
     if outlier == True:
         if pol == 'O3':
-            bins = [65, 70, 75, 80, 85]
+            bins = [65, 68, 70, 72, 74]
         elif pol == 'NO2':
             bins = [18, 20, 22, 24, 26]
         ax.bar(df['WD'], df[pol], normed=True, opening=0.8, bins=bins, alpha=0.8)
@@ -387,5 +420,84 @@ def plot_windrose(df, pol, season, outlier = False, region_name='하동', save_p
         plt.savefig(f'{save_path}{pol}_{season}_windrose.png', dpi=300)
         plt.show()
 
-#plot_windrose(outliers_o3_daily, 'O3', '겨울', outlier=True)
+# plot_windrose(outliers_o3_daily, 'O3', '겨울', outlier=True)
 plot_windrose(outliers_no2_daily, 'NO2', '겨울', outlier=True)
+#%% 2-2. 풍향 카테고리별 갯수
+thresholds = [0, 65, 70, 75, 80, 85]  # 농도 구간
+labels = ['0-65', '65-70', '70-75', '75-80', '80-85', '85+']  # 레이블
+colors = ['#ff9999', '#ffcc80', '#a3d9a5', '#99ccff', '#c2a5d8', '#f4b183']  # (6개 맞춤)
+
+bins_df = pd.DataFrame(0, index=['1', '2', '3', '4'], columns=labels)
+bins_df.index.name = 'category'
+bins_df.columns.name = 'label'
+
+pol = 'O3'
+for cat in ['1', '2', '3', '4']:
+    sub = df_o3_daily[df_o3_daily['category'] == cat]
+    for i in range(len(thresholds)):
+        lower = thresholds[i]
+        upper = thresholds[i+1] if i+1 < len(thresholds) else np.inf
+        count = sub[(sub[pol] >= lower) & (sub[pol] < upper)].shape[0]
+        bins_df.loc[cat, labels[i]] = count
+
+print(bins_df)
+#%% 2-3. 계절별
+def get_season(month):
+    if month in [3, 4, 5]:
+        return '봄'
+    elif month in [6, 7, 8]:
+        return '여름'
+    elif month in [9, 10, 11]:
+        return '가을'
+    else:
+        return '겨울'
+
+outliers_o3_daily['KST'] = pd.to_datetime(outliers_o3_daily['KST'])
+outliers_o3_daily = outliers_o3_daily.set_index('KST')
+outliers_o3_daily['Season'] = outliers_o3_daily.index.month.map(get_season)
+
+seasonal_counts = outliers_o3_daily.groupby(['Season', 'category']).size().reset_index(name='Count')
+season_totals = seasonal_counts.groupby('Season')['Count'].transform('sum')
+seasonal_counts['Percent'] = seasonal_counts['Count'] / season_totals * 100
+
+seasons = ['봄', '여름', '가을', '겨울']
+seasonal_counts = seasonal_counts[seasonal_counts['category'] != 'nan']
+categories = sorted(seasonal_counts['category'].unique())
+
+bar_width = 0.6
+x = np.arange(len(seasons)) 
+bottom = np.zeros(len(seasons))
+
+colors = ['#ff9999', '#ffcc80', '#a3d9a5', '#99ccff']
+
+fig, ax = plt.subplots(figsize=(7,4))
+
+for i, cat in enumerate(categories):
+    cat_data = seasonal_counts[seasonal_counts['category'] == cat].set_index('Season').reindex(seasons).fillna(0)
+
+    counts = cat_data['Count'].values
+    percents = cat_data['Percent'].values
+
+    bars = ax.bar(x, counts, bar_width, bottom=bottom, label=str(cat), color=colors[i])
+
+    for j, bar in enumerate(bars):
+        height = bar.get_height()
+        if height > 0:
+            ax.text(bar.get_x() + bar.get_width()/2, bottom[j] + height/2,
+                    f'{percents[j]:.1f}%', ha='center', va='center', fontsize=10)
+
+    bottom += counts
+season_counts_dict = seasonal_counts.groupby('Season')['Count'].sum().reindex(seasons).fillna(0).astype(int).to_dict()
+xtick_labels = [f'{season}({season_counts_dict[season]})' for season in seasons]
+pol_name = POLLUTANT(pol).name
+ax.set_xticks(x)
+ax.set_xticklabels(xtick_labels, fontsize=12)
+ax.set_ylabel('Count')
+ax.set_title(f'계절별 고농도 {pol_name} 카테고리 분포')
+ax.legend(title='category')
+plt.tight_layout()
+#plt.savefig('/home/hrjang2/0_code/hadong/{pol}_계절별_category_histogram.png', dpi=300)
+plt.show()
+#%%
+
+# %%
