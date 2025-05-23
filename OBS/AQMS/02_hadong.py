@@ -64,6 +64,28 @@ for idx in range(len(aws_o3)):
         wd_8hr_list.append(wd_mean)
 
 aws_o3['WD_8hr'] = wd_8hr_list
+#%%
+aws_933 = aws[aws.STN==932]
+aws_933['Month'] = aws_933['KST'].dt.month
+aws_933['Hour'] = aws_933['KST'].dt.hour
+
+aws_933_jja = aws_933[(aws_933['Month'] >= 6) & (aws_933['Month'] <= 8)]
+aws_933_jja_groupby = aws_933_jja.groupby(['Hour'])
+
+def plot_windrose_diurnal(aws_df):
+
+    df = aws_df.groupby(['Hour'])
+
+    for key, group in df:
+        fig, ax = plt.subplots(figsize=(5, 4))
+        ax = WindroseAxes.from_ax(fig=fig)
+        ax.bar(group['WD'], group['WS'], normed=True, opening=0.8, edgecolor='white')
+
+        ax.set_legend()
+        ax.set_title(f'{key[0]:02d}', fontsize=14)
+
+plot_windrose_diurnal(aws_933_jja)
+
 #%% 0-2. aqms 데이터 전처리
 def preprocess_aqms(data, pol, region_filter=None, station_filter=None):
     if region_filter:
@@ -91,9 +113,9 @@ def preprocess_aqms(data, pol, region_filter=None, station_filter=None):
 
 aqms_o3 = preprocess_aqms(aqms_data, 'O3', station_filter=[238161, 238162])
 aqms_no2 = preprocess_aqms(aqms_data, 'NO2', station_filter=[238161, 238162])
-aqms_no2 = aqms_no2.resample('D', on='KST').mean().reset_index()
-
-# dongnam_aqms_o3 = preprocess_aqms(aqms_data, 'O3', region_filter='부산|대구|진주|고성|창원|김해|양산|구미|칠곡|경산|영천|포항|경주|울산')
+aqms_no2_daily = aqms_no2.resample('D', on='KST').mean().reset_index()
+aqms_o3_daily = aqms_o3.resample('D', on='KST').mean().reset_index()
+dongnam_aqms_o3 = preprocess_aqms(aqms_data, 'O3', region_filter='부산|대구|진주|고성|창원|김해|양산|구미|칠곡|경산|영천|포항|경주|울산')
 # dongnam_aqms_no2 = preprocess_aqms(aqms_data, 'NO2', region_filter='부산|대구|진주|고성|창원|김해|양산|구미|칠곡|경산|영천|포항|경주|울산')
 #%% 0-3-0. AWS, AQMS 데이터 병합 // 동남권 데이터 처리
 def preprocess_pollutant(aqms_data, aws_data):
@@ -107,11 +129,16 @@ def preprocess_pollutant(aqms_data, aws_data):
 
     return df
 
-# df_o3 = preprocess_pollutant(aqms_o3, aws)
-# df_o3['KST'] = pd.to_datetime(df_o3['KST'])
-df_no2_daily = preprocess_pollutant(aqms_no2, aws_daily)
+df_o3 = preprocess_pollutant(aqms_o3, aws)
+df_o3['KST'] = pd.to_datetime(df_o3['KST'])
+df_no2 = preprocess_pollutant(aqms_no2, aws)
+df_no2['KST'] = pd.to_datetime(df_no2['KST'])
+
+df_no2_daily = preprocess_pollutant(aqms_no2_daily, aws_daily)
 df_no2_daily = df_no2_daily.dropna()
 
+df_o3_daily = preprocess_pollutant(aqms_o3_daily, aws_daily)
+df_o3_daily = df_o3_daily.dropna()
 # aqms_o3 = aqms_o3.reset_index(drop=False)
 aqms_o32 = preprocess_pollutant(aqms_o3, aws_o3)
 aqms_o32['8hr_max'] = aqms_o32['O3'].rolling(window=8, min_periods=6).mean()
@@ -125,17 +152,28 @@ daily_max_8hr = daily_max_8hr[['KST', '8hr_max', 'WD_8hr', 'WS', 'Year', 'Month'
 daily_max_8hr = daily_max_8hr.rename(columns={'KST': 'KST', '8hr_max': '8hr_max', 'WD_8hr': 'WD', 'WS':'WS','Year': 'Year', 'Month': 'Month'})
 
 # #동남권
-# df_dongnam_o3 = dongnam_aqms_o3.copy()    
-# df_dongnam_o3['KST'] = pd.to_datetime(df_dongnam_o3['KST'])
-# df_dongnam_o3 = df_dongnam_o3.resample('D', on='KST').mean().reset_index()
-# df_dongnam_o3 = df_dongnam_o3.dropna()
-# dongnam_o3_Q3 = df_dongnam_o3['O3'].quantile(0.75)
+df_dongnam_o3 = preprocess_pollutant(dongnam_aqms_o3, aws_o3)
+df_dongnam_o3['8hr_max'] = df_dongnam_o3['O3'].rolling(window=8, min_periods=6).mean()
+df_dongnam_o3['KST'] = df_dongnam_o3['KST'] - pd.Timedelta(hours=7)
+df_dongnam_o3 = df_dongnam_o3.set_index('KST')
+idx_dongnam = df_dongnam_o3.groupby(df_dongnam_o3.index.date)['8hr_max'].idxmax()
+idx_dongnam = idx_dongnam[idx_dongnam.notna()]
+idx_dongnam = idx_dongnam.drop(idx_dongnam.index[0])
+dongnam_max_8hr = df_dongnam_o3.loc[idx_dongnam].reset_index()
+dongnam_max_8hr = dongnam_max_8hr[['KST', '8hr_max', 'WD_8hr', 'WS', 'Year', 'Month']]
+dongnam_max_8hr = dongnam_max_8hr.rename(columns={'KST': 'KST', '8hr_max': '8hr_max', 'WD_8hr': 'WD', 'WS':'WS','Year': 'Year', 'Month': 'Month'})
 
-# df_dongnam_no2 = dongnam_aqms_no2.copy()    
-# df_dongnam_no2['KST'] = pd.to_datetime(df_dongnam_no2['KST'])
-# df_dongnam_no2 = df_dongnam_no2.resample('D', on='KST').mean().reset_index()
-# df_dongnam_no2 = df_dongnam_no2.dropna()
-# dongnam_no2_Q3 = df_dongnam_no2['NO2'].quantile(0.75)
+#df_dongnam_o3 = dongnam_aqms_o3.copy()    
+#df_dongnam_o3['KST'] = pd.to_datetime(df_dongnam_o3['KST'])
+#df_dongnam_o3 = df_dongnam_o3.resample('D', on='KST').mean().reset_index()
+#df_dongnam_o3 = df_dongnam_o3.dropna()
+#dongnam_o3_Q3 = df_dongnam_o3['O3'].quantile(0.75)
+
+#df_dongnam_no2 = dongnam_aqms_no2.copy()    
+#df_dongnam_no2['KST'] = pd.to_datetime(df_dongnam_no2['KST'])
+#df_dongnam_no2 = df_dongnam_no2.resample('D', on='KST').mean().reset_index()
+#df_dongnam_no2 = df_dongnam_no2.dropna()
+#dongnam_no2_Q3 = df_dongnam_no2['NO2'].quantile(0.75)
 #%% 0-4. 하동 풍향 카테고리 나누기 
 def add_wd_category(df):
     conditions = [
@@ -150,7 +188,7 @@ def add_wd_category(df):
 
 daily_max_8hr = add_wd_category(daily_max_8hr)
 df_no2_daily = add_wd_category(df_no2_daily)
-# df_o3, df_no2, df_o3_daily = add_wd_category(df_o3), add_wd_category(df_no2), add_wd_category(df_o3_daily)
+df_o3, df_no2= add_wd_category(df_o3), add_wd_category(df_no2)
 #%% 0-4-1 MDA8 데이터 정리
 daily_max_8hr_only = daily_max_8hr[daily_max_8hr['8hr_max'] > 60]
 daily_max_8hr_no = daily_max_8hr[daily_max_8hr['8hr_max'] <= 60]
@@ -174,52 +212,82 @@ def remove_outliers(df, pollutant):
 
     return df_no, outliers, Q1, Q2, Q3, lower_bound, upper_bound
 
-# df_o3_no, outliers_o3, Q1_o3, Q2_o3, Q3_o3, lower_bound_o3, upper_bound_o3 = remove_outliers(df_o3, 'O3')
-# df_no2_no, outliers_no2, Q1_no2, Q2_no2, Q3_no2, lower_bound_no2, upper_bound_no2 = remove_outliers(df_no2, 'NO2')
-# df_o3_no_daily, outliers_o3_daily, Q1_o3_daily, Q2_o3_daily, Q3_o3_daily, lower_bound_o3_daily, upper_bound_o3_daily= remove_outliers(df_o3_daily, 'O3')
+df_o3, df_no2 = df_o3.dropna(), df_no2.dropna()
+df_o3_no, outliers_o3, Q1_o3, Q2_o3, Q3_o3, lower_bound_o3, upper_bound_o3 = remove_outliers(df_o3, 'O3')
+df_no2_no, outliers_no2, Q1_no2, Q2_no2, Q3_no2, lower_bound_no2, upper_bound_no2 = remove_outliers(df_no2, 'NO2')
+df_o3_no_daily, outliers_o3_daily, Q1_o3_daily, Q2_o3_daily, Q3_o3_daily, lower_bound_o3_daily, upper_bound_o3_daily= remove_outliers(df_o3_daily, 'O3')
 df_no2_no_daily, outliers_no2_daily, Q1_no2_daily, Q2_no2_daily, Q3_no2_daily, lower_bound_no2_daily, upper_bound_no2_daily= remove_outliers(df_no2_daily, 'NO2')
 # df_o3_no_mda8, outliers_o3_mda8, Q1_o3_mda8, Q2_o3_mda8, Q3_o3_mda8, lower_bound_o3_mda8, upper_bound_o3_mda8 = remove_outliers(over_8hr, '8hr_max')
 
-# print(f'하동 Q3: {Q3_o3}, upper_bound: {upper_bound_o3}')
-# print(f'하동 daily O3 Q3: {int(Q3_o3_daily):02d}, upper_bound: {int(upper_bound_o3_daily):02d}')
-# print(f'하동 NO2 Q3: {Q3_no2}, upper_bound: {upper_bound_no2}')
+print(f'하동 Q3: {Q3_o3}, upper_bound: {upper_bound_o3}')
+print(f'하동 daily O3 Q3: {int(Q3_o3_daily):02d}, upper_bound: {int(upper_bound_o3_daily):02d}')
+print(f'하동 NO2 Q3: {Q3_no2}, upper_bound: {upper_bound_no2}')
 print(f'하동 daily NO2 Q3: {Q3_no2_daily:.3f}, upper_bound: {upper_bound_no2_daily:.3f}')
 # print(f'동남권 O3 Q3: {int(dongnam_o3_Q3):02d}, 동남권 NO2 Q3: {int(dongnam_no2_Q3):02d}')
+#%%
+
+
+
+
+
+'''
+MDA8 O3 동남권이랑 비교
+'''
+df_dongnam_o3['8hr_max'] = df_dongnam_o3['O3'].rolling(window=8, min_periods=6).mean()
+df_dongnam_o3['KST'] = df_dongnam_o3['KST'] - pd.Timedelta(hours=7)
+
+mean_in = daily_max_8hr.groupby('Year')['8hr_max'].mean()        # 하동 연평균
+df_dongnam_o3 = df_dongnam_o3.loc[df_dongnam_o3['KST'].dt.year < 2024]
+mean_no = df_dongnam_o3.groupby('Year')['8hr_max'].mean()      # 동남권 연평균
+Years = mean_in.index
+
+plt.figure(figsize=(6, 3))
+plt.plot(Years, mean_in.values, marker='o', label='하동', color='red')
+plt.plot(Years, mean_no.values, marker='o', label='동남권 평균', color='black')
+plt.title('MDA8 O$_3$ 연도별 평균 농도 비교', fontsize=12)
+plt.xlabel('연도', fontsize=12)
+plt.ylabel('MDA8 O$_3$ 농도 (ppb)', fontsize=12)
+plt.grid(True, linestyle='--', alpha=0.7)
+plt.xticks(Years)
+plt.legend()
+plt.tight_layout()
+plt.show()
+
 #%% 1-0. O3, NO2 통계 요약{안씀요}
-# def print_pollutant_summary(pol, outlier,df_in, df_no,region_name='하동'):
-#     if pol == 'O3':
-#         outlier = outliers_o3_daily.copy()
-#         df_in = df_o3_daily.copy()
-#         df_no = df_o3_no_daily.copy()
-#     elif pol == 'NO2':
-#         outlier = outliers_no2_daily.copy()
-#         df_in = df_no2_daily.copy()
-#         df_no = df_no2_no_daily.copy()
-#     else:
-#         raise ValueError("'O3' 또는 'NO2'만 가능함요")
+def print_pollutant_summary(pol, outlier,df_in, df_no,region_name='하동'):
+    if pol == 'O3':
+        outlier = outliers_o3_daily.copy()
+        df_in = df_o3_daily.copy()
+        df_no = df_o3_no_daily.copy()
+    elif pol == 'NO2':
+        outlier = outliers_no2_daily.copy()
+        df_in = df_no2_daily.copy()
+        df_no = df_no2_no_daily.copy()
+    else:
+        raise ValueError("'O3' 또는 'NO2'만 가능함요")
 
-#     h_mean_out = outlier[pol].mean()
-#     h_mean_in  = df_in[pol].mean()
-#     h_mean_no  = df_no[pol].mean()
-#     h_med_out = outlier[pol].median()
-#     h_med_in   = df_in[pol].median()
-#     h_med_no   = df_no[pol].median()
+    h_mean_out = outlier[pol].mean()
+    h_mean_in  = df_in[pol].mean()
+    h_mean_no  = df_no[pol].mean()
+    h_med_out = outlier[pol].median()
+    h_med_in   = df_in[pol].median()
+    h_med_no   = df_no[pol].median()
 
-#     pol_names = {'O3': '오존', 'NO2': '이산화질소'}
-#     pol_name = pol_names.get(pol, pol)
+    pol_names = {'O3': '오존', 'NO2': '이산화질소'}
+    pol_name = pol_names.get(pol, pol)
 
-#     print(f"\n📊 {region_name} {pol_name} 통계 요약 (단위:ppb)")
-#     print("-" * 43)
-#     print(f"{'구분':<10}{'Mean':>12}{'Median':>14}")
-#     print("-" * 43)
-#     print(f"{'고농도 only    ':<10}{h_mean_out:>12.3f}{h_med_out:>14.3f}")
-#     print(f"{'고농도 포함':<10}{h_mean_in:>12.3f}{h_med_in:>14.3f}")
-#     print(f"{'고농도 제외':<10}{h_mean_no:>12.3f}{h_med_no:>14.3f}")
-#     print("-" * 43)
+    print(f"\n📊 {region_name} {pol_name} 통계 요약 (단위:ppb)")
+    print("-" * 43)
+    print(f"{'구분':<10}{'Mean':>12}{'Median':>14}")
+    print("-" * 43)
+    print(f"{'고농도 only    ':<10}{h_mean_out:>12.3f}{h_med_out:>14.3f}")
+    print(f"{'고농도 포함':<10}{h_mean_in:>12.3f}{h_med_in:>14.3f}")
+    print(f"{'고농도 제외':<10}{h_mean_no:>12.3f}{h_med_no:>14.3f}")
+    print("-" * 43)
 
-# print(f'동남권 O3 Q3: {int(dongnam_o3_Q3):02d}, 동남권 NO2 Q3: {int(dongnam_no2_Q3):02d}')
-# print_pollutant_summary('O3', outliers_o3_daily, df_o3_daily, df_o3_no_daily)
-# print_pollutant_summary('NO2', outliers_no2_daily, df_no2_daily, df_no2_no_daily)
+print(f'동남권 O3 Q3: {int(dongnam_o3_Q3):02d}, 동남권 NO2 Q3: {int(dongnam_no2_Q3):02d}')
+print_pollutant_summary('O3', outliers_o3_daily, df_o3_daily, df_o3_no_daily)
+print_pollutant_summary('NO2', outliers_no2_daily, df_no2_daily, df_no2_no_daily)
 #%% 1-1. 하동 O3, NO2 Boxplot
 def plot_boxplot_with_stats(df, pol, Q1, Q2, Q3, lower_bound, upper_bound, save_path='/data02/dongnam/output_fig/hadong0/'):
 
@@ -261,8 +329,7 @@ def plot_yearly_mean(df, pol, region_name='지역명',save_path=None):
         h_mean = daily_max_8hr.groupby('Year')[pol].mean().drop(2024, errors='ignore')
         h_no_out_mean = daily_max_8hr_no.groupby('Year')[pol].mean().drop(2024, errors='ignore')
         plt.plot(h_out_mean.index, h_out_mean.values, marker='o', label='고농도 only', color='red')
-        plt.plot(h_mean.index, h_mean.values, marker='o', label='전체 데이터', color='black')
-        plt.plot(h_no_out_mean.index, h_no_out_mean.values, marker='o', label='고농도 제외', color='blue')
+        plt.plot(h_no_out_mean.index, h_no_out_mean.values, marker='o', label='고농도 제외', color='black')
         pol_name = 'MDA8'
     else:
         pol_name = POLLUTANT(pol).name
@@ -283,7 +350,7 @@ def plot_yearly_mean(df, pol, region_name='지역명',save_path=None):
         plt.show()
 
 
-plot_yearly_mean(daily_max_8hr, '8hr_max', region_name='하동', save_path='/data02/dongnam/output_fig/hadong/O3_MDA8/')
+plot_yearly_mean(daily_max_8hr, '8hr_max', region_name='하동')
 # plot_yearly_mean(df_o3_daily, outliers_o3_daily, df_o3_no_daily, 'O3', region_name='하동')
 plot_yearly_mean(df_no2_daily, 'NO2', region_name='하동', save_path='/data02/dongnam/output_fig/hadong/NO2/')
 #%% 1-3. O3, NO2 월별 평균 농도
@@ -306,8 +373,7 @@ def plot_yearmonthly(df, outlier, no_outlier, pol, region_name='지역명', save
     plt.figure(figsize=(8, 3))
 
     plt.plot(h_out_mean.index, h_out_mean[pol], marker='o', label='고농도 only', color='red')
-    plt.plot(h_mean.index, h_mean[pol], marker='o', label='전체 데이터', color='black')
-    plt.plot(h_no_out_mean.index, h_no_out_mean[pol], marker='o', label='고농도 제외', color='blue')
+    plt.plot(h_no_out_mean.index, h_no_out_mean[pol], marker='o', label='고농도 제외', color='black')
     
     
 
@@ -326,7 +392,7 @@ def plot_yearmonthly(df, outlier, no_outlier, pol, region_name='지역명', save
         plt.show()
 
 plot_yearmonthly(daily_max_8hr, daily_max_8hr_only, daily_max_8hr_no, '8hr_max', region_name='하동', save_path='/data02/dongnam/output_fig/hadong/O3_MDA8/')
-# plot_yearmonthly(df_o3_daily, outliers_o3_daily, df_o3_no_daily, 'O3', region_name='하동')
+plot_yearmonthly(df_o3_daily, outliers_o3_daily, df_o3_no_daily, 'O3', region_name='하동')
 plot_yearmonthly(df_no2_daily, outliers_no2_daily, df_no2_no_daily, 'NO2', region_name='하동', save_path='/data02/dongnam/output_fig/hadong/NO2/')
 #%% 1-4. O3, NO2 히스토그램
 def plot_histogram(df_in, df_no, pol, region_name='하동', save_path=None):
@@ -465,7 +531,7 @@ def plot_windrose(df, pol, season,region_name='하동', outlier=False):
 
 plot_windrose(daily_max_8hr, '8hr_max', '겨울', outlier=False)
 plot_windrose(daily_max_8hr_only, '8hr_max', '겨울', outlier=True)
-# plot_windrose(outliers_o3_daily, 'O3', '겨울', outlier=True)
+plot_windrose(outliers_o3_daily, 'O3', '겨울', outlier=True)
 plot_windrose(df_no2_daily, 'NO2', '겨울', outlier=False)
 plot_windrose(outliers_no2_daily, 'NO2', '겨울', outlier=True)
 #%% 2-2. 풍향 카테고리별 갯수
@@ -530,6 +596,9 @@ def season_count(df, pol):
             bins_df.loc[season, labels[i]] = count
     return bins_df
 
+print(season_count(daily_max_8hr, '8hr_max'))
+print('-----------------------------------------')
+print(season_count(df_no2_daily, 'NO2'))
 #%% 계절별_고농도_관측_횟수
 colors = {'봄': '#ff9999', '여름': '#ffcc80', '가을': '#a3d9a5', '겨울': '#99ccff'}
 def plot_yearly_seasonal_count(df, pol):
@@ -557,17 +626,16 @@ def plot_yearly_seasonal_count(df, pol):
     ax.set_ylabel('관측 횟수')
     ax.legend(fontsize=8)
     plt.tight_layout()
-    plt.savefig(f'/data02/dongnam/output_fig/hadong/O3_MDA8/{pol}_계절별_고농도_관측_횟수.png', dpi=300)
+    # plt.savefig(f'/data02/dongnam/output_fig/hadong/O3_MDA8/{pol}_계절별_고농도_관측_횟수.png', dpi=300)
     plt.show()
 
 plot_yearly_seasonal_count(daily_max_8hr_only, '8hr_max')
-# plot_yearly_seasonal_count(outliers_no2_daily, 'NO2')
 #%% 요일별
 weekday_order = ['월', '화', '수', '목', '금', '토', '일']
 weekday_map = {0: '월', 1: '화', 2: '수', 3: '목', 4: '금', 5: '토', 6: '일'}
 
 daily_max_8hr_only['요일'] = daily_max_8hr_only['KST'].dt.weekday.map(weekday_map)
-
+df_no2_daily['요일'] = df_no2_daily['KST'].dt.weekday.map(weekday_map)
 # =============================
 # ✅ 연도별 요일별 MDA8 발생 횟수
 # =============================
@@ -585,7 +653,6 @@ plt.legend(fontsize=8, bbox_to_anchor=(1.02, 0.8), loc='upper left', borderaxesp
 plt.tight_layout()
 # plt.savefig('/data02/dongnam/output_fig/hadong/O3_MDA8/연도별_요일별_MDA8_횟수.png', dpi=300)
 plt.show()
-
 
 # =============================
 # ✅ 연도별 요일별 MDA8 평균 농도
@@ -605,10 +672,30 @@ plt.tight_layout()
 # plt.savefig('/data02/dongnam/output_fig/hadong/O3_MDA8/연도별_요일별_MDA8_평균농도.png', dpi=300)
 plt.show()
 
+
+# =============================
+# ✅ 연도별 요일별 NO2 평균 농도
+# =============================
+
+mean_by_weekday = df_no2_daily.groupby(['요일', 'Year'])['NO2'].mean().unstack(fill_value=0)
+mean_by_weekday = mean_by_weekday.loc[weekday_order]
+mean_by_year = mean_by_weekday.T  # index: 연도, columns: 요일
+
+ax2 = mean_by_year.plot(kind='bar', figsize=(6, 3))
+plt.title('연도별 요일별 NO2 평균 농도')
+plt.xlabel('연도')
+plt.ylabel('NO2 평균 농도 (ppb)')
+plt.xticks(rotation=0)
+plt.grid(axis='y', linestyle='-', alpha=0.3)
+plt.legend(fontsize=8, bbox_to_anchor=(1.02, 0.8), loc='upper left', borderaxespad=0)
+plt.tight_layout()
+# plt.savefig('/data02/dongnam/output_fig/hadong/NO2/연도별_요일별_NO2_평균농도.png', dpi=300)
+plt.show()
+
 #%%
-'''
-계절별_boxplot
-'''
+# =============================
+# ✅ 계졀별 MDA8 평균 농도 Boxplot
+# =============================
 plt.figure(figsize=(6,3))
 sns.boxplot(data=daily_max_8hr_only, x='Year', y='8hr_max', hue='Season', palette=colors)
 plt.title('MDA8 고농도 분포')
@@ -618,10 +705,18 @@ plt.legend(fontsize=6)
 plt.savefig('/data02/dongnam/output_fig/hadong/O3_MDA8/계절별_boxplot.png', dpi=300)
 plt.show()
 
+plt.figure(figsize=(6,3))
+sns.boxplot(data=df_no2_daily, x='Year', y='NO2', hue='Season', palette=colors)
+plt.title('NO2 고농도 분포')
+plt.xlabel('연도')
+plt.ylabel('NO2 농도 (ppb)')
+plt.legend(fontsize=6)
+plt.savefig('/data02/dongnam/output_fig/hadong/NO2/요일별_boxplot.png', dpi=300)
+plt.show()
 
-'''
-계절별_고농도_수준
-'''
+# =============================
+# ✅ 계절별 MDA8 평균 농도 수준
+# =============================
 df_season_avg = daily_max_8hr_only.groupby(['Year', 'Season'])['8hr_max'].mean().reset_index()
 plt.figure(figsize=(6,3))
 sns.lineplot(data=df_season_avg, x='Year', y='8hr_max', hue='Season', marker='o', palette=colors)
@@ -636,9 +731,24 @@ plt.tight_layout()
 # plt.savefig('/data02/dongnam/output_fig/hadong/O3_MDA8/계절별_고농도_수준.png', dpi=300)
 plt.show()
 
-'''
-계절별 MDA8 초과율
-'''
+df_season_avg_no2 = df_no2_daily.groupby(['Year', 'Season'])['NO2'].mean().reset_index()
+plt.figure(figsize=(6,3))
+sns.lineplot(data=df_season_avg_no2, x='Year', y='NO2', hue='Season', marker='o', palette=colors)
+
+plt.title('연도별 계절별 NO2 농도 수준')
+plt.xlabel('연도')
+plt.ylabel('NO2 농도 (ppb)')
+plt.xticks([2019, 2020, 2021, 2022, 2023])
+plt.grid(alpha=0.7)
+plt.legend(fontsize=8)
+plt.tight_layout()
+# plt.savefig('/data02/dongnam/output_fig/hadong/NO2/계절별_고농도_수준.png', dpi=300)
+plt.show()
+
+
+# =============================
+# ✅ 계절별 MDA8 초과율
+# =============================
 
 daily_max_8hr['초과여부'] = daily_max_8hr['8hr_max'] > 60
 total_by_season = daily_max_8hr.groupby(['Year', 'Season']).size()
@@ -689,25 +799,25 @@ plt.tight_layout()
 plt.show()
 
 
-#%% 요일별/시간대별 패턴
-daily_max_8hr['Hour'] = daily_max_8hr['KST'].dt.hour.astype(int)
+#%% 시간대별 패턴
+daily_max_8hr_no['Hour'] = daily_max_8hr_no['KST'].dt.hour.astype(int)
 daily_max_8hr_only['Hour'] = daily_max_8hr_only['KST'].dt.hour.astype(int)
 
 hourly_mean = daily_max_8hr_only.groupby('Hour')['8hr_max'].mean().reset_index()
-hourly_mean2 = daily_max_8hr.groupby(['Hour'])['8hr_max'].mean().reset_index()
+hourly_mean2 = daily_max_8hr_no.groupby(['Hour'])['8hr_max'].mean().reset_index()
 hourly_year_mean = daily_max_8hr_only.groupby(['Hour', 'Year'])['8hr_max'].mean().unstack(fill_value=0)
 hourly_year_mean2 = daily_max_8hr.groupby(['Hour', 'Year'])['8hr_max'].mean().unstack(fill_value=0)
 
 plt.figure(figsize=(7, 3))
 sns.lineplot(data=hourly_mean, x='Hour', y='8hr_max', marker='o', color='red', label='고농도 only')
-sns.lineplot(data=hourly_mean2, x='Hour', y='8hr_max', marker='o', color='black', label='전체 데이터')
-plt.title('시간대별 MDA8 농도')
+sns.lineplot(data=hourly_mean2, x='Hour', y='8hr_max', marker='o', color='black', label='고농도 제외')
+plt.title('시간대별 MDA8 O$_3$ 농도')
 plt.xlabel('Hour')
 plt.xticks(range(0, 24, 1))
-plt.ylabel('MDA8 (ppb)')
+plt.ylabel('MDA8 O$_3$ (ppb)')
 plt.grid(True, linestyle='--', alpha=0.3)
 plt.tight_layout()
-plt.savefig('/data02/dongnam/output_fig/hadong/O3_MDA8/시간대별_고농도_MDA8농도.png', dpi=300)
+# plt.savefig('/data02/dongnam/output_fig/hadong/O3_MDA8/시간대별_고농도_MDA8농도.png', dpi=300)
 plt.show()
 
 '''
@@ -723,7 +833,7 @@ plt.xlabel('연도')
 plt.ylabel('시간대')
 plt.yticks(rotation=0)
 plt.tight_layout()
-plt.savefig('/data02/dongnam/output_fig/hadong/O3_MDA8/시간대별_고농도_MDA8_발생비율.png', dpi=300)
+# plt.savefig('/data02/dongnam/output_fig/hadong/O3_MDA8/시간대별_고농도_MDA8_발생비율.png', dpi=300)
 plt.show()
 
 '''
@@ -758,5 +868,137 @@ plt.ylabel('월')
 plt.yticks(rotation=0)
 plt.tight_layout()
 # plt.savefig('/data02/dongnam/output_fig/hadong/O3_MDA8/연도별_월별_초과일수.png', dpi=300)
+plt.show()
+
+# %% o3, no2 hourly data 사용
+'''
+NOₓ-limited = VOC는 충분, NOₓ이 부족 → NOₓ 늘리면 O₃ 생성 증가
+VOC-limited	= NOₓ는 많고 VOC가 부족 → NOₓ 줄이면 O₃ 생성 증가 가능
+Transition	=둘 다 적절한 수준 → 민감도 불명확
+'''
+daytime = pd.merge(df_o3, df_no2, on='KST')
+daytime['Hour'] = daytime['Hour_x'] 
+daytime = daytime.drop(columns=['Hour_x', 'Hour_y'])
+daytime['Month'] = daytime['Month_x']
+daytime = daytime.drop(columns=['Month_x', 'Month_y'])
+daytime = daytime[(daytime['Hour'] >= 8) & (daytime['Hour'] <= 17)]
+
+# 산점도 + 회귀선
+plt.figure(figsize=(6, 5))
+sns.regplot(data=daytime, x='NO2', y='O3', scatter_kws={'alpha':0.6}, line_kws={'color':'black'})
+plt.title('낮 시간대 (11~17시) O$_3$ vs NO$_2$')
+plt.xlabel('NO$_2$ 농도 (ppb)')
+plt.ylabel('O$_3$ 농도 (ppb)')
+plt.grid(True, linestyle='--', alpha=0.3)
+plt.tight_layout()
+plt.show()
+
+corr = daytime[['O3', 'NO2']].corr().iloc[0,1]
+print(f"O3 vs NO2 상관계수 (11-17시): {corr:.2f}")
+
+for month in sorted(daytime['Month'].unique()):
+    monthly = daytime[daytime['Month'] == month]
+    corr = monthly[['O3', 'NO2']].corr().iloc[0,1]
+    if corr > 0:
+        print(f"{month}월 상관계수: {corr:.2f}  NOₓ-limited")
+    elif corr < 0:
+        print(f"{month}월 상관계수: {corr:.2f}  VOC-limited")
+    else:
+        print(f"{month}월 상관계수: {corr:.2f}  Transition")
+# %% 일최대 O₃ 계산
+daily_max_o3 = df_o3.groupby(df_o3['KST'].dt.date)['O3'].max().reset_index()
+daily_max_o3.columns = ['KST', 'O3_max']
+
+exceed_days = daily_max_o3[daily_max_o3['O3_max'] > 100]['KST']
+
+df_high = df_no2[df_no2['KST'].dt.date.isin(exceed_days)]
+summary = df_high.groupby(df_high['KST'].dt.date).agg({
+    'NO2': 'mean',
+    'WS': 'mean'
+}).reset_index()
+
+summary.columns = ['KST', 'NO2_mean', 'WS_mean']
+summary = summary.merge(daily_max_o3, on='KST')
+summary = summary.round(2)
+# %% hourly trend
+# df_no2['Hour'] = df_no2['KST'].dt.hour.astype(int)
+numeric_cols = df_no2.select_dtypes(include='number').columns
+hourly_mean_no2 = df_no2.groupby('Hour')[numeric_cols].mean().reset_index()
+hourly_counts = df_no2.groupby('Hour').size().reset_index(name='Count')
+
+plt.figure(figsize=(6, 3))
+sns.lineplot(data=hourly_mean_no2, x='Hour', y='NO2', marker='o', color='black')
+plt.title('NO$_2$ 농도')
+plt.xlabel('시간')
+plt.xticks(range(0, 24, 1)) 
+plt.ylabel('NO$_2$ 농도 (ppb)')
+plt.grid(True, linestyle='--', alpha=0.5)
+plt.tight_layout()
+plt.show()
+# %%
+outliers_no2_daily['Season'] = outliers_no2_daily['Month'].apply(get_season)
+seasonal_counts = outliers_no2_daily.groupby(['Season', 'category']).size().reset_index(name='Count')
+
+seasons = ['봄', '여름', '가을', '겨울']
+seasonal_counts = seasonal_counts[seasonal_counts['category'] != 'nan']
+categories = sorted(seasonal_counts['category'].unique())
+
+bar_width = 0.6
+x = np.arange(len(seasons)) 
+bottom = np.zeros(len(seasons))
+
+colors = ['#ff9999', '#ffcc80', '#a3d9a5', '#99ccff']
+
+fig, ax = plt.subplots(figsize=(7,4))
+
+for i, cat in enumerate(categories):
+    cat_data = seasonal_counts[seasonal_counts['category'] == cat].set_index('Season').reindex(seasons).fillna(0)
+
+    counts = cat_data['Count'].values
+
+    bars = ax.bar(x, counts, bar_width, bottom=bottom, label=str(cat), color=colors[i])
+
+    for j, bar in enumerate(bars):
+        height = bar.get_height()
+        if height > 0:
+            ax.text(bar.get_x() + bar.get_width()/2, bottom[j] + height/2,
+                    f'{int(height)}', ha='center', va='center', fontsize=10)
+
+    bottom += counts
+
+season_counts_dict = seasonal_counts.groupby('Season')['Count'].sum().reindex(seasons).fillna(0).astype(int).to_dict()
+xtick_labels = [f'{season}({season_counts_dict[season]})' for season in seasons]
+
+ax.set_xticks(x)
+ax.set_xticklabels(xtick_labels, fontsize=12)
+ax.set_ylabel('Count')
+ax.set_title('하동 계절별 고농도 NO$_2$ 카테고리 분포')
+ax.legend(title='category')
+plt.tight_layout()
+plt.savefig('/data02/dongnam/output_fig/hadong/NO2/계절별_고농도_NO2_카테고리분포.png', dpi=300)
+plt.show()
+# %%
+all_Months = pd.Index(range(1, 13))
+outlier = outliers_no2_daily.groupby('Month')['NO2'].mean().reindex(all_Months).fillna(np.nan)
+mean_in = df_no2_daily.groupby('Month')['NO2'].mean()
+mean_no = df_no2_no_daily.groupby('Month')['NO2'].mean()
+
+Months = mean_in.index.astype(int).tolist()
+outlier = outlier.values
+with_outlier = mean_in.values
+without_outlier = mean_no.values
+
+plt.figure(figsize=(6, 3))
+plt.plot(Months, outlier, marker='o', label='고농도만', color='red')
+plt.plot(Months, with_outlier, marker='o', label='전체 평균', color='black')
+plt.plot(Months, without_outlier, marker='o', label='고농도 제외', color='blue')
+plt.title('NO$_2$ 월별 평균 농도 비교', fontsize=12)
+plt.xlabel('월', fontsize=12)
+plt.ylabel('NO$_2$ 평균 농도 (ppb)', fontsize=12)
+plt.xticks(Months)
+plt.grid(True, linestyle='--', alpha=0.7)
+plt.legend()
+plt.tight_layout()
+# plt.savefig('/home/hrjang2/0_code/hadong/하동_Monthly_NO2_비교.png', dpi=300)
 plt.show()
 # %%
